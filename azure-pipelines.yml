@@ -1,0 +1,90 @@
+trigger:
+  branches:
+    include:
+      - main
+schedules:
+  - cron: "0 2 * * *"        # every day at 02:00 UTC
+    displayName: Daily run
+    branches:
+      include:
+        - main
+    always: true
+
+variables:
+  # Python version
+  PYTHON_VERSION: "3.10"
+  # Azure service connection name configured in DevOps project
+  AZURE_SERVICE_CONNECTION: "MyAzureServiceConnection"
+
+stages:
+  - stage: Build_and_Test
+    displayName: "Build & Test"
+    jobs:
+      - job: Lint_and_UnitTests
+        displayName: "Lint & Unit Tests"
+        pool:
+          vmImage: "ubuntu-latest"
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: $(PYTHON_VERSION)
+          - script: |
+              python -m pip install --upgrade pip
+              pip install -r requirements.txt
+            displayName: "Install dependencies"
+          - script: |
+              black --check src tests
+              flake8 src tests
+            displayName: "Code style check"
+          - script: |
+              pytest --junitxml=$(Build.ArtifactStagingDirectory)/test-results.xml
+            displayName: "Run pytest"
+          - task: PublishTestResults@2
+            inputs:
+              testResultsFormat: "JUnit"
+              testResultsFiles: "$(Build.ArtifactStagingDirectory)/test-results.xml"
+
+  - stage: Deploy_Infra
+    displayName: "Deploy Infrastructure"
+    dependsOn: Build_and_Test
+    jobs:
+      - deployment: Terraform
+        displayName: "Terraform Apply"
+        environment: "dev"
+        pool:
+          vmImage: "ubuntu-latest"
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureCLI@2
+                  inputs:
+                    azureSubscription: $(AZURE_SERVICE_CONNECTION)
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      cd infra
+                      terraform init
+                      terraform apply -auto-approve
+                  displayName: "Terraform Init & Apply"
+
+  - stage: Optimize
+    displayName: "Run Cost Optimizer"
+    dependsOn: Deploy_Infra
+    jobs:
+      - job: Optimize
+        displayName: "Execute optimizer script"
+        pool:
+          vmImage: "ubuntu-latest"
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: $(PYTHON_VERSION)
+          - script: |
+              pip install -r requirements.txt
+              python -m src.optimizer \
+                --service-connection "$(AZURE_SERVICE_CONNECTION)" \
+                --output artifacts/recommendations.json
+            displayName: "Run optimizer"
+          - publish: artifacts/recommendations.json
+            artifact: recommendations
