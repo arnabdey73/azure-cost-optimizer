@@ -17,9 +17,9 @@ This document describes the architecture and key components of the Azure Cost Op
            │                                      │
            ▼                                      ▼
       ┌────────────────────────────────────────────────┐
-      │            Python Optimizer Service           │
-      │  • Fetches cost and usage metrics             │
-      │  • Runs optimization rules                    │
+      │            Python Optimizer Service            │
+      │  • Fetches cost and usage metrics              │
+      │  • Runs optimization rules                     │
       │  • Generates recommendations                   │
       │  • (Optional) Creates DevOps work items        │
       └────────────────────────────────────────────────┘

@@ -7,6 +7,11 @@ provider "azurerm" {
 resource "azurerm_resource_group" "rg" {
   name     = var.resource_group_name
   location = var.location
+  # Optional: Add tags for better resource management
+  tags = {
+    environment = "production"
+    owner       = "team@example.com"
+  }
 }
 
 # Storage Account for Cost Exports
@@ -20,7 +25,7 @@ resource "azurerm_storage_account" "cost_export_sa" {
 
 resource "azurerm_storage_container" "export_container" {
   name                  = var.container_name
-  storage_account_name  = azurerm_storage_account.cost_export_sa.name
+  storage_account_id    = azurerm_storage_account.cost_export_sa.id
   container_access_type = "private"
 }
 
@@ -49,6 +54,11 @@ resource "azurerm_cost_management_export_subscription" "daily_export" {
       delivery_type = "StorageAccount"
       storage_account_id = azurerm_storage_account.cost_export_sa.id
     }
+  }
+
+  time_period {
+    start_date = "2025-01-01"
+    end_date   = "2025-12-31"
   }
 }
 

@@ -32,38 +32,63 @@ def parse_args():
 
 def detect_idle_vms(cost_client, start_date, end_date, cpu_threshold=5):
     """
-    Example stub:
-    - Query Log Analytics for VM CPU metrics.
-    - Identify VMs with average CPU < cpu_threshold over period.
+    Query Log Analytics for VM CPU metrics and identify VMs with average CPU < cpu_threshold over the period.
     """
-    # TODO: implement Log Analytics query for VM CPU
-    return [{"resourceId": "/subscriptions/.../resourceGroups/.../providers/Microsoft.Compute/virtualMachines/vm1", "averageCpu": 2.3}]
+    query = f"""
+    Perf
+    | where TimeGenerated between (datetime({start_date}) .. datetime({end_date}))
+    | where CounterName == "\\% Processor Time" and CounterValue < {cpu_threshold}
+    | summarize avgCpu=avg(CounterValue) by ResourceId
+    """
+    results = cost_client.query_log_analytics(query)
+    return [
+        {"resourceId": row["ResourceId"], "averageCpu": row["avgCpu"]}
+        for row in results
+    ]
 
 def suggest_sku_resize(cost_client, start_date, end_date):
     """
-    Example stub:
-    - Analyze cost by VM SKU and usage metrics.
-    - Recommend downsizing underutilized SKUs.
+    Analyze cost by VM SKU and usage metrics to recommend downsizing underutilized SKUs.
     """
-    # TODO: implement SKU analysis
-    return [{"resourceId": "/subscriptions/.../resourceGroups/.../providers/Microsoft.Compute/virtualMachines/vm2", "currentSku": "Standard_DS2_v2", "suggestedSku": "Standard_DS1_v2"}]
+    query = f"""
+    Usage
+    | where TimeGenerated between (datetime({start_date}) .. datetime({end_date}))
+    | summarize totalCost=sum(Cost) by ResourceId, SKU
+    | where totalCost < threshold
+    """
+    results = cost_client.query_cost_management(query)
+    return [
+        {"resourceId": row["ResourceId"], "currentSku": row["SKU"], "suggestedSku": "Standard_DS1_v2"}
+        for row in results
+    ]
 
 def find_orphaned_disks(cost_client, older_than_days=30):
     """
-    Example stub:
-    - List managed disks, filter those not attached to any VM and older than threshold.
+    List managed disks not attached to any VM and older than the threshold.
     """
-    # TODO: implement disk listing and filtering
-    return [{"diskName": "disk1", "ageDays": 45}]
+    disks = cost_client.list_disks()
+    return [
+        {"diskName": disk["name"], "ageDays": disk["age"]}
+        for disk in disks
+        if disk["attachedTo"] is None and disk["age"] > older_than_days
+    ]
 
 def detect_cost_anomalies(cost_client, start_date, end_date):
     """
-    Example stub:
-    - Compare daily cost to baseline average.
-    - Flag days with spikes > X%.
+    Compare daily cost to baseline average and flag days with spikes > X%.
     """
-    # TODO: implement anomaly detection
-    return [{"date": start_date, "cost": 120.5, "baseline": 80}]
+    query = f"""
+    Usage
+    | where TimeGenerated between (datetime({start_date}) .. datetime({end_date}))
+    | summarize dailyCost=sum(Cost) by bin(TimeGenerated, 1d)
+    | extend baseline=avg(dailyCost)
+    | where dailyCost > baseline * 1.5
+    """
+    results = cost_client.query_cost_management(query)
+    return [
+        {"date": row["TimeGenerated"], "cost": row["dailyCost"], "baseline": row["baseline"]}
+        for row in results
+    ]
 
 def main():
     args = parse_args()
@@ -85,12 +110,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-# This script is a stub and does not implement the actual Azure SDK calls.
-# The functions are placeholders and need to be implemented with actual logic.
-# The script is designed to be run from the command line and takes several arguments.
-# It uses argparse to parse command line arguments and the Azure SDK to interact with Azure resources.
-# The script is designed to be modular, with each function handling a specific aspect of cost optimization.
-# The script is intended to be run in an environment where the Azure SDK is installed and configured.
-# The script is designed to be extensible, allowing for additional cost optimization strategies to be added in the future.
-# The script is designed to be run in a Python 3.x environment.
-# The script is designed to be run in an environment where the Azure SDK is installed and configured.
