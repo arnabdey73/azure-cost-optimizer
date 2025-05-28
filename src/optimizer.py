@@ -91,22 +91,63 @@ def detect_cost_anomalies(cost_client, start_date, end_date):
     ]
 
 def main():
-    args = parse_args()
-    client = AzureCostClient(subscription_id=args.subscription_id)
+    import logging
+    from src.config import Config
 
-    recs = {
-        "timestamp": datetime.utcnow().isoformat(),
-        "idleVMs": detect_idle_vms(client, args.start_date, args.end_date),
-        "skuResizes": suggest_sku_resize(client, args.start_date, args.end_date),
-        "orphanedDisks": find_orphaned_disks(client),
-        "costAnomalies": detect_cost_anomalies(client, args.start_date, args.end_date),
-    }
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    logger = logging.getLogger(__name__)
+    
+    try:
+        args = parse_args()
+        config = Config()
+        logger.info(f"Starting Azure Cost Optimizer with subscription ID: {args.subscription_id}")
+        
+        client = AzureCostClient(subscription_id=args.subscription_id)
+        
+        logger.info(f"Starting optimization for subscription {client.subscription_id}")
+        logger.info(f"Date range: {args.start_date} to {args.end_date}")
 
-    os.makedirs(os.path.dirname(args.output), exist_ok=True)
-    with open(args.output, "w") as f:
-        json.dump(recs, f, indent=2)
+        # Detect idle VMs
+        logger.info("Detecting idle VMs...")
+        idle_vms = detect_idle_vms(client, args.start_date, args.end_date, 
+                                 cpu_threshold=config.cpu_threshold)
+        logger.info(f"Found {len(idle_vms)} idle VMs")
+        
+        # Suggest VM SKU resizing
+        logger.info("Suggesting VM SKU resizes...")
+        sku_resizes = suggest_sku_resize(client, args.start_date, args.end_date)
+        logger.info(f"Found {len(sku_resizes)} VM resize opportunities")
+        
+        # Find orphaned disks
+        logger.info("Finding orphaned disks...")
+        orphaned_disks = find_orphaned_disks(client, older_than_days=config.disk_age_threshold)
+        logger.info(f"Found {len(orphaned_disks)} orphaned disks")
+        
+        # Detect cost anomalies
+        logger.info("Detecting cost anomalies...")
+        anomalies = detect_cost_anomalies(client, args.start_date, args.end_date)
+        logger.info(f"Found {len(anomalies)} cost anomalies")
 
-    print(f"Recommendations written to {args.output}")
+        recs = {
+            "timestamp": datetime.utcnow().isoformat(),
+            "idleVMs": idle_vms,
+            "skuResizes": sku_resizes,
+            "orphanedDisks": orphaned_disks,
+            "costAnomalies": anomalies,
+        }
+
+        os.makedirs(os.path.dirname(args.output), exist_ok=True)
+        with open(args.output, "w") as f:
+            json.dump(recs, f, indent=2)
+
+        logger.info(f"Recommendations written to {args.output}")
+    except Exception as e:
+        logger.error(f"Error running cost optimizer: {e}", exc_info=True)
+        raise
 
 if __name__ == "__main__":
     main()

@@ -31,3 +31,16 @@ variable "workspace_name" {
   type        = string
   default     = "cost-optimizer-law"
 }
+
+variable "client_secret" {
+  description = "Service Principal client secret to store in Key Vault"
+  type        = string
+  sensitive   = true
+  default     = ""  # Should be provided during deployment
+}
+
+variable "allowed_ip_ranges" {
+  description = "List of IP addresses or CIDR blocks allowed to access Key Vault"
+  type        = list(string)
+  default     = []  # Should be configured during deployment
+}
